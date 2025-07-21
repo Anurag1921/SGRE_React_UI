@@ -1,15 +1,15 @@
 trigger:
   branches:
     include:
-      - master
+      - main
 
 pool:
-  vmImage: 'ubuntu-latest'
+  name: Test
 
 variables:
-  appName: 'lab002'
+  appName: 'lab003'
   packagePath: '$(System.DefaultWorkingDirectory)/build'
-  resourceGroupName: 'RGDEVBUGENAPAWE01'
+  resourceGroupName: 'RG-APP-SERVICE'
 
 steps:
   - task: NodeTool@0
@@ -21,6 +21,16 @@ steps:
       npm install
       npm run build
     displayName: 'Install dependencies and build React app'
+
+  - script: |
+      echo "Listing working directory contents..."
+      ls -R $(System.DefaultWorkingDirectory)
+    displayName: 'Debug: List working directory contents'
+
+  - script: |
+      echo "Listing node_modules contents..."
+      ls -R node_modules || echo "node_modules not found"
+    displayName: 'Debug: List node_modules contents'
 
   - task: ArchiveFiles@2
     inputs:
@@ -39,30 +49,50 @@ steps:
 
   - task: AzureCLI@2
     inputs:
-      azureSubscription: 'SGRE DEV BU GEN WE01 – CSP'
+      azureSubscription: 'Pay-As-You-Go'
       scriptType: 'bash'
       scriptLocation: 'inlineScript'
       inlineScript: |
         echo "Checking and adding access restriction rules for AzureDevOps..."
 
-        # Check and add main site rule
-        main_rule=$(az webapp config access-restriction show           --name "$appName"           --resource-group "$resourceGroupName"           --query "[?name=='AllowAzureDevOps'] | length(@)"           --output tsv)
+        main_rule=$(az webapp config access-restriction show \
+          --name "$appName" \
+          --resource-group "$resourceGroupName" \
+          --query "[?name=='AllowAzureDevOps'] | length(@)" \
+          --output tsv)
         main_rule=${main_rule:-0}
 
         if [ "$main_rule" -eq 0 ]; then
           echo "Adding AzureDevOps access restriction rule to main site..."
-          az webapp config access-restriction add             --resource-group "$resourceGroupName"             --name "$appName"             --rule-name "AllowAzureDevOps"             --priority 100             --action Allow             --service-tag AzureDevOps
+          az webapp config access-restriction add \
+            --resource-group "$resourceGroupName" \
+            --name "$appName" \
+            --rule-name "AllowAzureDevOps" \
+            --priority 100 \
+            --action Allow \
+            --service-tag AzureDevOps
         else
           echo "Access restriction rule 'AllowAzureDevOps' already exists on main site. Skipping."
         fi
 
-        # Check and add SCM site rule
-        scm_rule=$(az webapp config access-restriction show           --name "$appName"           --resource-group "$resourceGroupName"           --slot scm           --query "[?name=='AllowAzureDevOpsSCM'] | length(@)"           --output tsv)
+        scm_rule=$(az webapp config access-restriction show \
+          --name "$appName" \
+          --resource-group "$resourceGroupName" \
+          --slot scm \
+          --query "[?name=='AllowAzureDevOpsSCM'] | length(@)" \
+          --output tsv)
         scm_rule=${scm_rule:-0}
 
         if [ "$scm_rule" -eq 0 ]; then
           echo "Adding AzureDevOps access restriction rule to SCM site..."
-          az webapp config access-restriction add             --resource-group "$resourceGroupName"             --name "$appName"             --rule-name "AllowAzureDevOpsSCM"             --priority 101             --action Allow             --service-tag AzureDevOps             --scm-site true
+          az webapp config access-restriction add \
+            --resource-group "$resourceGroupName" \
+            --name "$appName" \
+            --rule-name "AllowAzureDevOpsSCM" \
+            --priority 101 \
+            --action Allow \
+            --service-tag AzureDevOps \
+            --scm-site true
         else
           echo "Access restriction rule 'AllowAzureDevOpsSCM' already exists on SCM site. Skipping."
         fi
@@ -73,17 +103,19 @@ steps:
 
   - task: AzureCLI@2
     inputs:
-      azureSubscription: 'SGRE DEV BU GEN WE01 – CSP'
+      azureSubscription: 'Pay-As-You-Go'
       scriptType: 'bash'
       scriptLocation: 'inlineScript'
       inlineScript: |
         echo "Verifying access restriction rules..."
-        az webapp config access-restriction show           --name "$appName"           --resource-group "$resourceGroupName"
+        az webapp config access-restriction show \
+          --name "$appName" \
+          --resource-group "$resourceGroupName"
     displayName: 'Verify Azure DevOps Access Restriction Rules'
 
   - task: AzureWebApp@1
     inputs:
-      azureSubscription: 'SGRE DEV BU GEN WE01 – CSP'
+      azureSubscription: 'Pay-As-You-Go'
       appType: 'webApp'
       appName: '$(appName)'
       package: '$(Build.ArtifactStagingDirectory)/$(appName).zip'
